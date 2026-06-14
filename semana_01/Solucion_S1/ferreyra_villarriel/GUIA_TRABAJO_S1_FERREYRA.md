@@ -288,21 +288,21 @@ Describe brevemente el proyecto Big Data que tu grupo ha elegido:
 
 _Respuesta_:
 
-**Nombre del proyecto:** Plataforma de Analítica Integrada para Gestión Universitaria — Detección de Riesgo Académico y Optimización de Recursos
+**Nombre del proyecto:** Predicción Espacio-Temporal de Congestión Vehicular y Optimización Dinámica de Rutas en Lima Metropolitana mediante Procesamiento Big Data y Grafos
 
-**Empresa/sector:** Sector educación superior (universidades privadas en Perú)
+**Empresa/sector:** Smart City / Transporte / Gobierno Local — Lima Metropolitana
 
-**Problema que resuelve:** Las instituciones de educación superior carecen de infraestructura centralizada de datos que permita cruzar en tiempo real información académica (notas, asistencia, actividad en LMS), financiera (pagos de pensiones, deudas) y social (satisfacción estudiantil, menciones en RRSS). La ausencia de estas capacidades obliga a depender de reportes manuales, silos de información y terceros para análisis básicos, generando retrasos en la detección de deserción estudiantil y dificultando decisiones estratégicas de rectorado.
+**Equipo (Grupo 3):** Ferreyra (líder/arquitectura), Huapaya (ingesta GPS/PySpark), Orellano (dashboard/mapas), Paredes y Zevallos (GraphX/Neo4j/ML)
+
+**Problema que resuelve:** Lima es la 5ta ciudad más congestionada de América Latina (TomTom Traffic Index 2024). Los limeños pierden en promedio 117 horas al año atascados en tráfico, con un impacto económico de S/ 6,200 millones/año (MTC 2023). Más de 500,000 puntos GPS de taxis y buses se generan por hora pero no se procesan para optimización en tiempo real: los semáforos tienen tiempos fijos, no existe predicción de congestión con anticipación, y los eventos públicos (partidos, conciertos, desfiles) no se integran al modelo de tráfico.
 
 **5 V's presentes en el proyecto:**
 
-- **Volumen:** Miles de estudiantes activos generando millones de eventos en el LMS, pagos y registros académicos por ciclo
-- **Velocidad:** Los accesos al LMS y las transacciones de pago requieren ingesta en tiempo real para alertas oportunas
-- **Variedad:** Datos de notas en SQL (estructurado), logs de Moodle en JSON (semi-estructurado), comentarios de estudiantes en RRSS y grabaciones de clase (no estructurado)
-- **Veracidad:** Crítica para los modelos de predicción de deserción; datos de baja calidad generan falsos positivos que generan intervenciones innecesarias o dejan sin atención a estudiantes realmente en riesgo
-- **Valor:** El objetivo final es reducir la tasa de deserción estudiantil y optimizar la asignación de recursos docentes; el valor es medible en retención de matrícula y eficiencia operacional
-
-> **Nota:** Confirmar con el grupo los datos específicos del proyecto elegido (nombre definitivo, dataset, empresa ancla, tecnologías confirmadas) para actualizar esta respuesta antes de la entrega final.
+- **Volumen:** 50K vehículos × 1 punto GPS/min × 16h/día = **48 millones de puntos GPS/día** → ~3.3 TB/año
+- **Velocidad:** Near Real-time — actualización de rutas alternativas cada 2 minutos; predicción de congestión con 30 minutos de anticipación
+- **Variedad:** GPS lat/lon (estructurado), GeoJSON de OpenStreetMap (semi-estructurado), datos climáticos SENAMHI en JSON (semi-estructurado), eventos públicos Lima (no estructurado)
+- **Veracidad:** Señales GPS perdidas, coordenadas fuera de rango geográfico, duplicados por re-transmisión; el modelo debe ser robusto ante el ruido GPS inherente
+- **Valor:** Reducir 20% el tiempo en viaje = ahorro estimado de S/ 1,240 millones/año para Lima; aplicable directamente al MTC y municipalidades distritales para optimización de semáforos y rutas
 
 ---
 
@@ -314,27 +314,30 @@ Dibuja (a mano o usando draw.io) una arquitectura inicial **muy básica** de có
 
 _Link o descripción de tu diagrama_:
 
-**Descripción textual de la arquitectura:**
+**Arquitectura del proyecto Smart Traffic Lima:**
 
 ```bash
-FUENTES DE DATOS          INGESTA            ALMACENAMIENTO       PROCESAMIENTO        VISUALIZACIÓN
-───────────────────────────────────────────────────────────────────────────────────────────────────
-┌──────────────┐          ┌──────────┐       ┌─────────────┐      ┌─────────────┐     ┌──────────┐
-│ LMS (Moodle) │─────────▶│          │       │  DATA LAKE  │      │ Apache Spark│     │          │
-│ (logs JSON)  │          │  Apache  │──────▶│  (AWS S3)   │─────▶│  (batch ML) │────▶│ Power BI │
-├──────────────┤          │  Kafka   │       │             │      ├─────────────┤     │/Superset │
-│ ERP / Notas  │─────────▶│(streaming│       │  DATA       │      │ Spark       │     │(dashbords│
-│ (SQL)        │          │real-time)│──────▶│  WAREHOUSE  │─────▶│ Streaming   │     │ejecutivo)│
-├──────────────┤          │          │       │ (Redshift)  │      │(alertas RT) │     └──────────┘
-│ Pagos /      │─────────▶│          │       └─────────────┘      └─────────────┘
-│ Tesorería    │          └──────────┘
-├──────────────┤
-│ RRSS /       │     Orquestación: Apache Airflow
-│ Encuestas    │     Gobierno:     AWS Glue Data Catalog
-└──────────────┘     Seguridad:    IAM + KMS (cifrado en reposo y tránsito) + RBAC
+FUENTES DE DATOS               PROCESAMIENTO SPARK          NEO4J + ML              VISUALIZACIÓN
+────────────────────────────────────────────────────────────────────────────────────────────────
+┌──────────────────┐           ┌──────────────────────┐    ┌──────────────────┐    ┌───────────┐
+│ Simulador GPS    │           │  PySpark 3.5          │    │  NEO4J GRAPH DB  │    │  Folium   │
+│ 50K vehículos   │──────────▶│  joins + agrega-      │───▶│  Grafo calles    │───▶│  Kepler   │
+│ (lat/lon/ts)     │           │  ciones por           │    │  Lima (15K nodos │    │  .gl      │
+├──────────────────┤           │  segmento de calle    │    │  40K aristas)    │    │  (mapa    │
+│ OpenStreetMap    │           ├──────────────────────┤    │  Cypher: rutas   │    │  interac- │
+│ Lima GeoJSON     │──────────▶│  GraphX               │    │  óptimas < 2s    │    │  tivo)    │
+├──────────────────┤           │  PageRank: cuellos    │    └──────────────────┘    └───────────┘
+│ SENAMHI API      │──────────▶│  de botella           │
+│ Clima Lima       │           ├──────────────────────┤    ┌──────────────────┐
+├──────────────────┤           │  MLlib Random Forest  │───▶│  MongoDB Atlas   │
+│ Eventos públicos │──────────▶│  Predicción congest.  │    │  (predicciones   │
+│ Lima (JSON)      │           │  30 min anticipación  │    │  y eventos)      │
+└──────────────────┘           └──────────────────────┘    └──────────────────┘
+
+Stack: PySpark 3.5 | Databricks Community | Neo4j AuraDB Free | MongoDB Atlas M0
 ```
 
-> **Tarea manual requerida:** Crear el diagrama formal en [draw.io](https://draw.io) o a mano y adjuntar la imagen o link al repositorio de GitHub Classroom antes de la entrega.
+Diagrama formal adjunto en el link de drive indicado arriba.
 
 ---
 
